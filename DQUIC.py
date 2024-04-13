@@ -72,28 +72,25 @@ class DQUIC:
     def bind(self, server_address):
         self.sock.bind(server_address)
 
-    def send_to(self, address, objects_dict: dict) -> int:
+    def send_to(self, address, ser_obj_dict: dict[int, bytes]) -> int:
         """
         The function sends the objects and streams id's as bytes to dst address.
         :param address: destination address
-        :param objects_dict: objects to send represented by (stream_id:int : object)
+        :param ser_obj_dict: objects to send represented by (stream_id:int : object:bytes)
         :return: number of bytes sent
         """
 
-        # objects serialization and streams sizes setting:
-        ser_obj_dict = {}
+        # stream sizes setting and frames building:
         streams_sizes = []
         max_frames_needed = 0
         frames = []
-        for stream_id, obj in objects_dict.items():
-            ser_obj = pickle.dumps(obj)  # serializing the current object
+        for stream_id, ser_obj in ser_obj_dict.items():
             print(f"in stream: {stream_id}, ser_obj size: {len(ser_obj)}")
-            ser_obj_dict[stream_id] = ser_obj  # appending to the serialized list
             stream_size = random.randint(1000, 2000)
             streams_sizes.append(stream_size)
             # calculating max number of frames needed:
-            tmp = len(ser_obj)//stream_size
-            if len(ser_obj) % stream_size != 0:
+            tmp = len(ser_obj)//stream_size  # = number of frames need to send ser_obj
+            if len(ser_obj) % stream_size != 0:  # appending 1 for extra bytes if needed
                 tmp += 1
             if tmp > max_frames_needed:  # updating the max frames needed
                 max_frames_needed = tmp
@@ -101,21 +98,22 @@ class DQUIC:
             frames.append(DQUICFrame(stream_id, 0, stream_size))
 
         # loop over the needed packets:
-        total_bytes_sent = 0
-
-        for i in range(max_frames_needed):
+        total_bytes_sent_udp = 0
+        total_bytes_sent_objs = 0
+        for i in range(max_frames_needed):  # note: "i" represent the number of the DQUIC packet
 
             packet_payload = b""
-            frames_num = 0
+            frames_num = 0  # counting the number of frames in this DQUIC packet
 
             # loop over the needed frames:
-            for j, (stram_id, ser_obj) in enumerate(ser_obj_dict.items()):
+            for j, (stram_id, ser_obj) in enumerate(ser_obj_dict.items()):  # note: "j" represent the number of frame
                 # building the stream data payload:
                 bytes_to_send = min(streams_sizes[j], len(ser_obj)-frames[j].offset)
-                if bytes_to_send == 0:  # in case the object was fully transmitted
+                if bytes_to_send == 0:  # in case the object was already fully transmitted
                     continue
                 stream_data = ser_obj[frames[j].offset:frames[j].offset+bytes_to_send]
-                print(f"frame: {j}, stream data size: {len(stream_data)}")
+                total_bytes_sent_objs += bytes_to_send
+                # print(f"frame: {j}, stream data size: {bytes_to_send}")
 
                 # building the frame:
                 frames[j].set_length(bytes_to_send)
@@ -132,13 +130,15 @@ class DQUIC:
             packet_header = DQUICHeader(SHORT, self.sent_order)
             self.sent_order += 1
             packet_to_send = packet_header.to_bytes() + packet_payload
+            # sending over UDP socket:
+            total_bytes_sent_udp += self.sock.sendto(packet_to_send, address)
+            # print(f"packet number{self.sent_order-1}sent")
 
-            total_bytes_sent += self.sock.sendto(packet_to_send, address)
-            print(f"packet with {frames_num} frames sent")
+            # print(f"packet with {frames_num} frames sent")
 
-        print(f"packets sent: {max_frames_needed}")
-        print(f"total bytes sent: {total_bytes_sent}")
-        return total_bytes_sent
+        print(f"packets sent: {self.sent_order}")
+        print(f"total bytes sent (objs): {total_bytes_sent_objs}")
+        return total_bytes_sent_objs
 
     def receive_from(self, max_bytes: int):
         """
@@ -146,27 +146,27 @@ class DQUIC:
         :param max_bytes: maximun bytes willing to accept
         :return: sender address and serialized objects represented by (stream_id:int : object:bytes)
         """
-        print("got 1")
+        # print("got 1")
         received_bytes, sender_address = self.sock.recvfrom(65536)
-        print("got 2")
+        # print("got 2")
         len_recv_bytes = len(received_bytes)
 
         # extracting packet header:
-        tmp_header = DQUICHeader(SHORT, 2)
-        header_len = len(tmp_header.to_bytes())
+        header_len = len(DQUICHeader(SHORT, 2).to_bytes())  # measuring DQUICHeader
         packet_header: DQUICHeader = DQUICHeader.from_bytes(received_bytes[:header_len])
 
-        deser_pointer = header_len
-        objs_dict = {}
+        deser_pointer = header_len  # pointer for deserialization of header and frames
+        objs_dict = {}  # the returning dict
+        objects_bytes = 0
 
         # handling object transition:
         if packet_header.packet_type == SHORT and packet_header.packet_number == self.recv_order:
             self.recv_order += 1
 
-            tmp = DQUICFrame(5, 6, 7)
-            frame_len = len(tmp.to_bytes())
-            # print(f"small frame:{frame_len}")
+            # measuring DQUICFrame
+            frame_len = len(DQUICFrame(5, 6, 7).to_bytes())
 
+            # unpacking packet payload:
             while True:
                 # extracting frame:
                 curr_frame: DQUICFrame = DQUICFrame.from_bytes(received_bytes[deser_pointer:deser_pointer+frame_len])
@@ -175,12 +175,17 @@ class DQUIC:
                 # extracting stream data:
                 stream_data: bytes = received_bytes[deser_pointer:deser_pointer+curr_frame.length]
                 deser_pointer += curr_frame.length  # updating pointer
-                objs_dict[curr_frame.stream_id] = stream_data
+                objects_bytes += curr_frame.length  # updating the total amount of object bytes received
+                if objects_bytes > max_bytes:  # in case bytes received is too large
+                    return sender_address, objs_dict  # returning the dict without curr object
+
+                objs_dict[curr_frame.stream_id] = stream_data  # appending object to returning dict
 
                 if deser_pointer >= len_recv_bytes:
                     break
 
-        print(f"packets till now: {self.recv_order}")
+            # print(f"packets till now: {self.recv_order-1}")
+
         return sender_address, objs_dict
 
     def close(self):
