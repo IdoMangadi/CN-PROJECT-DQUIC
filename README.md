@@ -1,2 +1,2 @@
 # DQUIC
-Communication networks - DQUIC Project
+Communication networks: DQUIC Project
