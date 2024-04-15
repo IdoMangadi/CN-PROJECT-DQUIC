@@ -1,4 +1,3 @@
-import pickle
 import random
 import DQUIC
 
@@ -14,8 +13,8 @@ def main():
     num_objects = 10
 
     # Convert MB to bytes
-    min_size_bytes = 100 * 1024
-    max_size_bytes = 200 * 1024
+    min_size_bytes = 30 * 1024
+    max_size_bytes = 50 * 1024
 
     print("Generating 10 objects...")
     # Generate random sizes for the objects
@@ -30,8 +29,10 @@ def main():
     server_socket = DQUIC.DQUIC()
     server_address = ('localhost', 9998)
     server_socket.bind(server_address)
-    print("DQUIC socket is up! Waiting for requests...")
+    print("DQUIC socket is up!")
 
+    # while input("Keep receiving requests?\n1- YES\n2- NO\n") == "1":
+    print("Waiting for requests...")
     # receiving request from client:
     client_address, data = server_socket.receive_from(65536)
     total_request_size = 0
@@ -44,8 +45,10 @@ def main():
         for string in streams_list:
             tmp = string.split(":")  # tmp = [stream_id : object's_number]
             dict_to_send[int(tmp[0])] = random_objects[int(tmp[1])]  # the form of: (stream_id: object)
-            total_request_size += object_sizes[int(tmp[1])]
-            print("Stream:"+tmp[0]+", Object:"+tmp[1]+f", Size:{object_sizes[int(tmp[1])]}")
+            total_request_size += len(dict_to_send[int(tmp[0])])
+            print("Stream:"+tmp[0]+", Object:"+tmp[1]+f", "
+                                                      f"Actual size: {object_sizes[int(tmp[1])]} "
+                                                      f"Size in dict_to_send:{len(dict_to_send[int(tmp[0])])}")
         # sending the dict:
         print(f"total objects size: {total_request_size}")
         print("Sending objects...\n")
@@ -53,6 +56,7 @@ def main():
 
     print("Sending finishing msg")
     server_socket.send_to(client_address, {77: "fin".encode()})
+
     server_socket.close()
     print("Socket closed")
 

@@ -1,7 +1,6 @@
 import socket
 from typing import List
 import random
-import pickle
 import struct
 
 MAX_RECV_BYTES = 65536
@@ -12,8 +11,8 @@ MAX_STREAMS = 10
 class DQUICHeader:
     HEADER_FORMAT = "!BI"  # Format string for packing/unpacking
 
-    def __init__(self, type: int, packet_number: int):  # dst_conn_id: int
-        self.packet_type = type
+    def __init__(self, packet_type: int, packet_number: int):  # dst_conn_id: int
+        self.packet_type = packet_type
         # self.dst_conn_id = dst_conn_id
         self.packet_number = packet_number
 
@@ -84,6 +83,7 @@ class DQUIC:
         streams_sizes = []
         max_frames_needed = 0
         frames = []
+        print("Start sending:")
         for stream_id, ser_obj in ser_obj_dict.items():
             print(f"in stream: {stream_id}, ser_obj size: {len(ser_obj)}")
             stream_size = random.randint(1000, 2000)
@@ -100,6 +100,7 @@ class DQUIC:
         # loop over the needed packets:
         total_bytes_sent_udp = 0
         total_bytes_sent_objs = 0
+        fin = True
         for i in range(max_frames_needed):  # note: "i" represent the number of the DQUIC packet
 
             packet_payload = b""
@@ -137,13 +138,14 @@ class DQUIC:
             # print(f"packet with {frames_num} frames sent")
 
         print(f"packets sent: {self.sent_order}")
+        print(f"total bytes sent (udp): {total_bytes_sent_udp}")
         print(f"total bytes sent (objs): {total_bytes_sent_objs}")
         return total_bytes_sent_objs
 
     def receive_from(self, max_bytes: int):
         """
         The function receives data from src
-        :param max_bytes: maximun bytes willing to accept
+        :param max_bytes: maximum bytes willing to accept
         :return: sender address and serialized objects represented by (stream_id:int : object:bytes)
         """
         # print("got 1")
@@ -160,8 +162,9 @@ class DQUIC:
         objects_bytes = 0
 
         # handling object transition:
-        if packet_header.packet_type == SHORT and packet_header.packet_number == self.recv_order:
-            self.recv_order += 1
+        if packet_header.packet_type == SHORT:  # and packet_header.packet_number == self.recv_order:
+            self.recv_order += 1  # here can be checksum and sequence number validation
+            print(f"packet number: {packet_header.packet_number}")
 
             # measuring DQUICFrame
             frame_len = len(DQUICFrame(5, 6, 7).to_bytes())
