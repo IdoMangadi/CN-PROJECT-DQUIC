@@ -106,9 +106,9 @@ class DQUIC:
         # stream sizes setting and frames building:
         streams_sizes = []
         frames = []
-        print("Start sending:")
+        print("DQUIC PRINT: Start sending:")
         for stream_id, ser_obj in ser_obj_dict.items():
-            print(f"in stream: {stream_id}, ser_obj size: {len(ser_obj)}")
+            print(f"DQUIC PRINT: in stream: {stream_id}, ser_obj size: {len(ser_obj)}")
             stream_size = random.randint(1000, 2000)  # random stream size as required
             streams_sizes.append(stream_size)
             # building frame:
@@ -207,14 +207,14 @@ class DQUIC:
                 break
             # handling too many tries:
             if tries > MAX_TRIES:
-                print("Not responding receiver")
+                print("DQUIC PRINT: Not responding receiver")
                 break
 
             # print(f"packet with {frames_num} frames sent")
 
-        print(f"\npackets sent: {curr_connection.sent_packet_number}")
-        print(f"total bytes sent (udp): {total_bytes_sent_udp}")
-        print(f"total bytes sent (objs): {total_bytes_sent_objs}")
+        print(f"\nDQUIC PRINT: packets sent: {curr_connection.sent_packet_number}")
+        print(f"DQUIC PRINT: total bytes sent (udp): {total_bytes_sent_udp}")
+        print(f"DQUIC PRINT: total bytes sent (objs): {total_bytes_sent_objs}\n")
         return total_bytes_sent_objs
 
     def receive_from(self, max_bytes: int):
@@ -296,7 +296,7 @@ class DQUIC:
             # print(f"packets till now: {self.recv_order-1}")
             # sending ack:
             ack_packet_header = DQUICHeader(ACK, packet_header.packet_number)
-            curr_connection.sent_packet_number += 1
+            curr_connection.sent_packet_number += 1  # doing this in including of the ack packet
             self.sock.sendto(ack_packet_header.to_bytes()+ack_packet_payload, sender_address)
 
             # time.sleep(3)

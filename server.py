@@ -12,9 +12,9 @@ def generate_random_object(size_bytes) -> bytes:
 def main():
     num_objects = 10
 
-    # Convert MB to bytes
-    min_size_bytes = 10 * 1024
-    max_size_bytes = 20 * 1024
+    # Convert MB to bytes:
+    min_size_bytes = 1 * 1024 * 1024  # 1 MB
+    max_size_bytes = 2 * 1024 * 1024  # 2 MB
 
     print("Generating 10 objects...")
     # Generate random sizes for the objects

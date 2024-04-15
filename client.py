@@ -25,15 +25,15 @@ def main():
     ser_objs_dict[77] = b""
 
     # starting to receive response:
-    print("Waiting for response...")
+    print("Waiting for response...\n")
     packets_received = 0
 
     # debug print:
     # print(f"number of objects: {len(ser_objs_dict)}, size: {len(ser_objs_dict[1])}")
 
     # while loop to consume all sent data:
+    print("Start receiving")
     while ser_objs_dict[77] != "fin".encode():  # 77 represent the stream used to set delivery status
-        # print("stack")  # debug print
         server_address, response = client_socket.receive_from(65536)
         packets_received += 1
         # consuming each serialized piece into the correct stream:
@@ -41,7 +41,7 @@ def main():
             ser_objs_dict[stream_id] += response[stream_id]
             # print(f"In stream:{stream_id}, received by now:{len(ser_objs_dict[stream_id])} bytes")
 
-    print("Receiving completed!")
+    print("Receiving completed!\n")
     print(f"total packets received: {packets_received}")
     # printing states:
     del ser_objs_dict[77]
@@ -50,7 +50,7 @@ def main():
         print(f"In stream:{stream_id}, object number:{tmp[1]} object size:{len(ser_obj)}")
 
     client_socket.close()
-    print("Socket closed")
+    print("\nSocket closed")
 
 
 if __name__ == '__main__':
