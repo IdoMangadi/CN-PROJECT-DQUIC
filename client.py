@@ -6,7 +6,7 @@ def main():
     # generating socket:
     print("Generating DQUIC socket...")
     client_socket = DQUIC.DQUIC()
-    server_address = ('localhost', 9998)
+    server_address = ('localhost', 9999)
 
     # building request somehow (can be input or whatever):
     str_request = "1:3 2:4 4:8 6:9"
@@ -39,7 +39,7 @@ def main():
         # consuming each serialized piece into the correct stream:
         for stream_id in response:
             ser_objs_dict[stream_id] += response[stream_id]
-            print(f"In stream:{stream_id}, received by now:{len(ser_objs_dict[stream_id])} bytes")
+            # print(f"In stream:{stream_id}, received by now:{len(ser_objs_dict[stream_id])} bytes")
 
     print("Receiving completed!")
     print(f"total packets received: {packets_received}")

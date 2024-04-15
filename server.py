@@ -13,8 +13,8 @@ def main():
     num_objects = 10
 
     # Convert MB to bytes
-    min_size_bytes = 30 * 1024
-    max_size_bytes = 50 * 1024
+    min_size_bytes = 10 * 1024
+    max_size_bytes = 20 * 1024
 
     print("Generating 10 objects...")
     # Generate random sizes for the objects
@@ -27,7 +27,7 @@ def main():
     # generating socket:
     print("Generating DQUIC socket...")
     server_socket = DQUIC.DQUIC()
-    server_address = ('localhost', 9998)
+    server_address = ('localhost', 9999)
     server_socket.bind(server_address)
     print("DQUIC socket is up!")
 
@@ -47,8 +47,7 @@ def main():
             dict_to_send[int(tmp[0])] = random_objects[int(tmp[1])]  # the form of: (stream_id: object)
             total_request_size += len(dict_to_send[int(tmp[0])])
             print("Stream:"+tmp[0]+", Object:"+tmp[1]+f", "
-                                                      f"Actual size: {object_sizes[int(tmp[1])]} "
-                                                      f"Size in dict_to_send:{len(dict_to_send[int(tmp[0])])}")
+                                                      f"Actual size: {object_sizes[int(tmp[1])]}")
         # sending the dict:
         print(f"total objects size: {total_request_size}")
         print("Sending objects...\n")
