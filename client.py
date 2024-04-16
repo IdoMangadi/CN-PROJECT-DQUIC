@@ -1,15 +1,39 @@
 import DQUIC
+import sys
+import random
 
 
 def main():
+    # handling arguments:
+    arguments = sys.argv
+    if len(arguments) != 2 or not arguments[1].isdigit() or int(arguments[1]) > 10:
+        print("ERROR: argument not correct. please enter number between 1-10")
+        return
+    number_of_streams = int(arguments[1])
+
+    # building request somehow (can be input or whatever):
+    # Generate unique random numbers for left and right sides of pairs
+    left_side = list(range(10))
+    right_side = list(range(10))
+    random.shuffle(left_side)
+    random.shuffle(right_side)
+
+    # Take the required number of pairs
+    pairs = []
+    for i in range(number_of_streams):
+        pairs.append((left_side[i], right_side[i]))
+
+    # Create the string format "int:int int:int int:int ..."
+    str_request = " ".join([f"{pair[0]}:{pair[1]}" for pair in pairs])
+
+    # Ensure there are no leading or trailing spaces
+    str_request = str_request.strip()
 
     # generating socket:
     print("Generating DQUIC socket...")
     client_socket = DQUIC.DQUIC()
     server_address = ('localhost', 9999)
 
-    # building request somehow (can be input or whatever):
-    str_request = "1:3 2:4 4:8 6:9"
     # request represented by {server's stream id for requests: "client's stream id: object needed ..."}
     client_request = {66: str_request.encode()}  # 66 is the stream that gets requests
     print(f"Sending request: {str_request}")
