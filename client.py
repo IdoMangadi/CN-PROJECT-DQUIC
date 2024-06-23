@@ -9,7 +9,7 @@ def main():
     if len(arguments) != 2 or not arguments[1].isdigit() or int(arguments[1]) > 10:
         print("ERROR: argument not correct. please enter number between 1-10")
         return
-    number_of_streams = int(arguments[1])
+    number_of_streams = int(arguments[1])  # number of streams to request
 
     # building request somehow (can be input or whatever):
     # Generate unique random numbers for left and right sides of pairs

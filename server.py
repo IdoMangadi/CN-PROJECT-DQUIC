@@ -31,7 +31,7 @@ def main():
     server_socket.bind(server_address)
     print("DQUIC socket is up!")
 
-    # while input("Keep receiving requests?\n1- YES\n2- NO\n") == "1":
+    # while input("Continuing receiving requests?\n1- YES\n2- NO\n") == "1":
     print("Waiting for requests...")
     # receiving request from client:
     client_address, data = server_socket.receive_from(65536)
@@ -43,7 +43,7 @@ def main():
         dict_to_send = {}
         # building the dict to send:
         for string in streams_list:
-            tmp = string.split(":")  # tmp = [stream_id : object's_number]
+            tmp = string.split(":")  # tmp = [stream_id , object's_number]
             dict_to_send[int(tmp[0])] = random_objects[int(tmp[1])]  # the form of: (stream_id: object)
             total_request_size += len(dict_to_send[int(tmp[0])])
             print("Stream:"+tmp[0]+", Object:"+tmp[1]+f", "

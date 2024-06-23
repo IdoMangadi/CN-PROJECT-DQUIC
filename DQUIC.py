@@ -9,9 +9,12 @@ MAX_RECV_BYTES = 65536
 SHORT = 3
 DATA = 5
 ACK = 6
-MAX_STREAMS = 10
-ACK_TIMEOUT = 2
-MAX_TRIES = 4
+MAX_STREAMS = 10  # maximum number of streams
+ACK_TIMEOUT = 2  # timeout for ack receiving
+MAX_TRIES = 4  # maximum tries to send a packet
+MAX_FRAMES_IN_PACKET = 3  # maximum frames in a packet
+MAX_STREAM_SIZE = 2000  # maximum size of stream
+MIN_STREAM_SIZE = 1000  # minimum size of stream
 
 
 class DQUICHeader:
@@ -37,14 +40,15 @@ class DQUICHeader:
 
 
 class DQUICFrame:
-    # -----
-    # -----
+    """
+    A class representing a DQUIC frame.
+    """
     FRAME_FORMAT = "!IIQI"  # Format string for packing/unpacking
 
     def __init__(self, stream_id: int, frame_type: int, offset: int, length: int):
         self.stream_id = stream_id  # represent the stream id
         self.frame_type = frame_type  # represent the frame type
-        self.offset = offset  # represent the bytes that was already acknowledged from the object
+        self.offset = offset  # represent the bytes that was already acknowledged from the object !!
         self.length = length  # represent the actual size of the stream data
 
     def set_length(self, length: int):
@@ -87,6 +91,7 @@ class DQUIC:
     def bind(self, server_address):
         self.sock.bind(server_address)
 
+    # ------------------------------------------------------------------------------------------------------------------
     def send_to(self, address, ser_obj_dict: dict[int, bytes]) -> int:
         """
         The function sends the objects and streams id's as bytes to dst address.
@@ -107,15 +112,15 @@ class DQUIC:
 
         # stream sizes setting and frames building:
         streams_sizes = {}  # represent the sizes of each stream
-        frames = []  # represent the total frames needed in this sending process
+        frames = []  # represent the total frames needed in this sending process ( = number of objects to send)
         frames_to_send = []  # represent a list of pointers to the frames that actually needs to send
         streams_times = {}  # for times measuring and containing
         max_stream_time = 0  # will represent the total time of sending process
         # print("DQUIC PRINT: Start sending:")
         for stream_id, ser_obj in ser_obj_dict.items():
             # print(f"DQUIC PRINT: in stream: {stream_id}, ser_obj size: {len(ser_obj)}")
-            stream_size = random.randint(1000, 2000)  # random stream size as required
-            streams_sizes[stream_id] = stream_size
+            stream_size = random.randint(MIN_STREAM_SIZE, MAX_STREAM_SIZE)  # randomizing stream sizes as required
+            streams_sizes[stream_id] = stream_size  # setting the stream size
             # building frame:
             frames.append(DQUICFrame(stream_id, DATA, 0, stream_size))
             frames_to_send.append(frames[-1])  # appending the last frames appended to frames
@@ -133,15 +138,25 @@ class DQUIC:
 
             packet_payload = b""
 
+            # randomize frames according to the max frames in packet:
+            streams_ids_to_send = []  # represent the streams that will be sent in this packet
+            if len(frames_to_send) <= MAX_FRAMES_IN_PACKET:
+                streams_ids_to_send = [frame.stream_id for frame in frames_to_send]  # getting all streams to send
+            else:
+                streams_ids_to_send = random.sample([frame.stream_id for frame in frames_to_send], MAX_FRAMES_IN_PACKET)
+                # print(f"randomized streams to send: {streams_ids_to_send}")
+
             # loop over the needed frames:
             for frame in frames_to_send:  # note: the loop is only over the streams that has more data to send
+                if frame.stream_id not in streams_ids_to_send:  # skipping the streams that are not in the current packet
+                    continue
                 # building the stream data payload:
-                bytes_to_send = min(streams_sizes[frame.stream_id], len(ser_obj_dict[frame.stream_id])-frame.offset)
+                bytes_to_send = min(streams_sizes[frame.stream_id], len(ser_obj_dict[frame.stream_id])-frame.offset)  # calculating the minimum between the stream size and the remaining bytes to send
                 if bytes_to_send == 0:  # in case the object was already fully transmitted
-                    frames_to_send.remove(frame)
+                    frames_to_send.remove(frame)  # removing the frame from the list
                     # TIMES HANDLING: calculating time for stream:
                     streams_times[frame.stream_id] = time.perf_counter() - streams_times[frame.stream_id]
-                    max_stream_time = streams_times[frame.stream_id]
+                    max_stream_time = streams_times[frame.stream_id]  # it will get the last stream time
                     continue
                 # cutting the data to send from the relevant object:
                 stream_data = ser_obj_dict[frame.stream_id][frame.offset:frame.offset+bytes_to_send]
@@ -224,7 +239,7 @@ class DQUIC:
 
             # print(f"packet with {frames_num} frames sent")
 
-        print(f"\nDQUIC PRINT: total packets sent to {address}: {curr_connection.sent_packet_number}")
+        # print(f"\nDQUIC PRINT: total packets sent to {address}: {curr_connection.sent_packet_number}")
         # print(f"DQUIC PRINT: total bytes sent (udp): {total_bytes_sent_udp}")
         # print(f"DQUIC PRINT: total bytes sent (objs): {total_bytes_sent_objs}\n")
 
@@ -233,19 +248,19 @@ class DQUIC:
             frames_sum = 0
             print("\n-------------------------------------- STATES --------------------------------------")
             print("\n(a)+(b)+(c): Streams info")
-            for i, flow in enumerate(frames):
-                stream_id = flow.stream_id
-                stream_size = streams_sizes[stream_id]
-                total_bytes = flow.offset
-                total_bytes_sent_objs += total_bytes
-                stream_packets = math.ceil(total_bytes//stream_size)
-                frames_sum += stream_packets
+            for i, flow in enumerate(frames):  # calculating states for each stream:
+                stream_id = flow.stream_id  # getting the stream id
+                stream_size = streams_sizes[stream_id]  # getting the stream size (randomized)
+                total_bytes = flow.offset  # getting the total bytes sent via this stream
+                total_bytes_sent_objs += total_bytes  # updating the total bytes sent to this address
+                stream_frames = math.ceil(total_bytes//stream_size)  # calculating the total frames sent via this stream
+                frames_sum += stream_frames
                 print(f"Stream: {stream_id}, Stream size: {stream_size} bytes, Total bytes sent: {total_bytes},"
                       f" Pace: {(total_bytes/streams_times[stream_id]):.2f} B/s, "
-                      f"{(stream_packets/streams_times[stream_id]):.2f} Packet/s")
+                      f"{(stream_frames/streams_times[stream_id]):.2f} Packet/s")
 
             print("\n(d)+(e): Connection info:")
-            print(f"Received data pace: {(total_bytes_sent_objs/max_stream_time):.2f} Bytes/s, {(frames_sum/max_stream_time):.2f} Packets/s")
+            print(f"Received data pace: {(total_bytes_sent_objs/max_stream_time):.2f} Bytes/s, {(curr_connection.sent_packet_number/max_stream_time):.2f} Packets/s")
             print("\n------------------------------------------------------------------------------------\n")
 
         return total_bytes_sent_objs
