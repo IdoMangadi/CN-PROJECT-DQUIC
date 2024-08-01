@@ -26,7 +26,7 @@ class TestDQUIC(unittest.TestCase):
 
     def test_Connection(self):
         conn = Connection(('localhost', 8080), 1)
-        self.assertEqual(conn.addr, ('localhost', 8080))
+        self.assertEqual(conn.addr, ('localhost', 8080)) 
         self.assertEqual(conn.conn_id, 1)
 
     def test_bind(self):
