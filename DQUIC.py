@@ -12,7 +12,7 @@ ACK = 6
 MAX_STREAMS = 10  # maximum number of streams
 ACK_TIMEOUT = 2  # timeout for ack receiving
 MAX_TRIES = 4  # maximum tries to send a packet
-MAX_FRAMES_IN_PACKET = 3  # maximum frames in a packet
+MAX_FRAMES_IN_PACKET = 7  # maximum frames in a packet
 MAX_STREAM_SIZE = 2000  # maximum size of stream
 MIN_STREAM_SIZE = 1000  # minimum size of stream
 
@@ -87,11 +87,29 @@ class DQUIC:
     def __init__(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.connections = []  # representing the connections by this socket
+        self.__header_len = len(DQUICHeader(SHORT, 2).to_bytes())  # measuring DQUICHeader
+        self.__frame_len = len(DQUICFrame(5, DATA, 6, 7).to_bytes())  # measuring DQUICFrame
 
     def bind(self, server_address):
         self.sock.bind(server_address)
 
-    # ------------------------------------------------------------------------------------------------------------------
+    def __connection_handling(self, address) -> Connection:
+        """
+        The function handles the connection by the address.
+        :param address: the address to handle
+        :return: the connection object
+        """
+        is_exist = False
+        curr_connection: Connection = None  # will finally hold the current connection object
+        for conn in self.connections:  # checking if address is in the connections
+            if conn.addr == address:
+                is_exist = True
+                curr_connection = conn
+        if is_exist is False:  # in case the address is not in the connections list, we create a new connection:
+            self.connections.append(Connection(address, len(self.connections)))
+            curr_connection = self.connections[-1]
+        return curr_connection
+
     def send_to(self, address, ser_obj_dict: dict[int, bytes]) -> int:
         """
         The function sends the objects and streams id's as bytes to dst address.
@@ -100,15 +118,7 @@ class DQUIC:
         :return: number of bytes sent
         """
         # handling connection:
-        is_exist = False
-        curr_connection: Connection = None  # will finally hold the current connection object
-        for conn in self.connections:  # checking if address is in the connections
-            if conn.addr == address:
-                is_exist = True
-                curr_connection = conn
-        if is_exist is False:
-            self.connections.append(Connection(address, len(self.connections)))
-            curr_connection = self.connections[-1]
+        curr_connection = self.__connection_handling(address)
 
         # stream sizes setting and frames building:
         streams_sizes = {}  # represent the sizes of each stream
@@ -116,11 +126,11 @@ class DQUIC:
         frames_to_send = []  # represent a list of pointers to the frames that actually needs to send
         streams_times = {}  # for times measuring and containing
         max_stream_time = 0  # will represent the total time of sending process
-        # print("DQUIC PRINT: Start sending:")
+
         for stream_id, ser_obj in ser_obj_dict.items():
-            # print(f"DQUIC PRINT: in stream: {stream_id}, ser_obj size: {len(ser_obj)}")
-            stream_size = random.randint(MIN_STREAM_SIZE, MAX_STREAM_SIZE)  # randomizing stream sizes as required
-            streams_sizes[stream_id] = stream_size  # setting the stream size
+            # randomizing stream sizes as required:
+            stream_size = random.randint(MIN_STREAM_SIZE, MAX_STREAM_SIZE)
+            streams_sizes[stream_id] = stream_size
             # building frame:
             frames.append(DQUICFrame(stream_id, DATA, 0, stream_size))
             frames_to_send.append(frames[-1])  # appending the last frames appended to frames
@@ -132,8 +142,6 @@ class DQUIC:
         # loop over the packets to send:
         total_bytes_sent_udp = 0
         total_bytes_sent_objs = 0
-        header_len = len(DQUICHeader(SHORT, 2).to_bytes())  # measuring DQUICHeader
-        frame_len = len(DQUICFrame(5, DATA, 6, 7).to_bytes())  # measuring DQUICFrame
         while frames_to_send:  # checking if the list to send isn't empty
 
             packet_payload = b""
@@ -202,11 +210,8 @@ class DQUIC:
                 len_recv_bytes = len(received_bytes)
 
                 # extracting packet header:
-                received_packet_header: DQUICHeader = DQUICHeader.from_bytes(received_bytes[:header_len])
-                # print(f"IN ACK PROCESS: ack packet type:{received_packet_header.packet_type} packet number:{received_packet_header.packet_number}")
-                deser_pointer = header_len  # pointer for deserialization of header and frames
-
-                # time.sleep(3)
+                received_packet_header: DQUICHeader = DQUICHeader.from_bytes(received_bytes[:self.__header_len])
+                deser_pointer = self.__header_len  # pointer for deserialization of header and frames
 
                 if received_packet_header.packet_number != packet_header.packet_number \
                         or received_packet_header.packet_type != ACK:  # means the packet didn't acked the sent data
@@ -215,9 +220,9 @@ class DQUIC:
                     continue
 
                 # extracting frames:
-                while len_recv_bytes - deser_pointer >= frame_len:
-                    curr_frame: DQUICFrame = DQUICFrame.from_bytes(received_bytes[deser_pointer:deser_pointer + frame_len])
-                    deser_pointer += frame_len  # updating pointer
+                while len_recv_bytes - deser_pointer >= self.__frame_len:
+                    curr_frame: DQUICFrame = DQUICFrame.from_bytes(received_bytes[deser_pointer:deser_pointer + self.__frame_len])
+                    deser_pointer += self.__frame_len  # updating pointer
 
                     if curr_frame.frame_type == ACK:
                         # loop over sender sent frames:
@@ -276,21 +281,12 @@ class DQUIC:
         len_recv_bytes = len(received_bytes)
 
         # handling connection:
-        is_exist = False
-        curr_connection: Connection = None
-        for conn in self.connections:  # checking if address is in the connections list
-            if conn.addr == sender_address:
-                is_exist = True
-                curr_connection = conn
-        if is_exist is False:
-            self.connections.append(Connection(sender_address, len(self.connections)))
-            curr_connection = self.connections[-1]
+        curr_connection: Connection = self.__connection_handling(sender_address)
 
         # extracting packet header:
-        header_len = len(DQUICHeader(SHORT, 2).to_bytes())  # measuring DQUICHeader
-        packet_header: DQUICHeader = DQUICHeader.from_bytes(received_bytes[:header_len])
+        packet_header: DQUICHeader = DQUICHeader.from_bytes(received_bytes[:self.__header_len])
 
-        deser_pointer = header_len  # pointer for deserialization of header and frames
+        deser_pointer = self.__header_len  # pointer for deserialization of header and frames
         objs_dict = {}  # the returning dict
         objects_bytes = 0
 
@@ -298,21 +294,18 @@ class DQUIC:
         if packet_header.packet_type == SHORT:
             curr_connection.recv_packet_number += 1
 
-            # here can be checksum and sequence number validation (for cumulative ack)
+            # here can be checksum and sequence number validation
 
             # print(f"received packet number: {packet_header.packet_number}")
-
-            # measuring DQUICFrame
-            frame_len = len(DQUICFrame(5, DATA, 6, 7).to_bytes())
 
             # generating ack packet payload:
             ack_packet_payload = b""
 
             # unpacking packet payload:
-            while len(received_bytes) - deser_pointer >= frame_len:
+            while len(received_bytes) - deser_pointer >= self.__frame_len:
                 # extracting frame:
-                curr_frame: DQUICFrame = DQUICFrame.from_bytes(received_bytes[deser_pointer:deser_pointer+frame_len])
-                deser_pointer += frame_len  # updating pointer
+                curr_frame: DQUICFrame = DQUICFrame.from_bytes(received_bytes[deser_pointer:deser_pointer+self.__frame_len])
+                deser_pointer += self.__frame_len  # updating pointer
 
                 # extracting stream data:
                 stream_data: bytes = received_bytes[deser_pointer:deser_pointer+curr_frame.length]
@@ -343,8 +336,6 @@ class DQUIC:
             ack_packet_header = DQUICHeader(ACK, packet_header.packet_number)
             curr_connection.sent_packet_number += 1  # doing this in including of the ack packet
             self.sock.sendto(ack_packet_header.to_bytes()+ack_packet_payload, sender_address)
-
-            # time.sleep(3)
 
         return sender_address, objs_dict
 
