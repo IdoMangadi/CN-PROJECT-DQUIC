@@ -154,8 +154,9 @@ class DQUIC:
                 streams_ids_to_send = random.sample([frame.stream_id for frame in frames_to_send], MAX_FRAMES_IN_PACKET)
                 # print(f"randomized streams to send: {streams_ids_to_send}")
 
+            frames_to_send_copy = frames_to_send.copy()  # copying the list to iterate over
             # loop over the needed frames:
-            for frame in frames_to_send:  # note: the loop is only over the streams that has more data to send
+            for frame in frames_to_send_copy:  # note: the loop is only over the streams that has more data to send
                 if frame.stream_id not in streams_ids_to_send:  # skipping the streams that are not in the current packet
                     continue
                 # building the stream data payload:
@@ -208,6 +209,7 @@ class DQUIC:
                 except socket.timeout:
                     continue
                 len_recv_bytes = len(received_bytes)
+                print(f"received ack from {acking_address} with {len_recv_bytes} bytes")
 
                 # extracting packet header:
                 received_packet_header: DQUICHeader = DQUICHeader.from_bytes(received_bytes[:self.__header_len])
@@ -215,8 +217,8 @@ class DQUIC:
 
                 if received_packet_header.packet_number != packet_header.packet_number \
                         or received_packet_header.packet_type != ACK:  # means the packet didn't acked the sent data
-                    # print(received_packet_header.packet_type)
-                    # print("IN ACK PROCESS: ACK didn't pass")
+                    print(received_packet_header.packet_type)
+                    print("IN ACK PROCESS: ACK didn't pass")
                     continue
 
                 # extracting frames:
@@ -236,10 +238,11 @@ class DQUIC:
                     # ensuring data skipping:
                     deser_pointer += curr_frame.length  # updating pointer according to stream data length
 
+                print(f"breaking, my destination is: {address}")
                 break
             # handling too many tries:
             if tries > MAX_TRIES:
-                print("DQUIC PRINT: Not responding receiver")
+                print(f"DQUIC PRINT: Not responding receiver (address: {address})")
                 break
 
             # print(f"packet with {frames_num} frames sent")
@@ -271,6 +274,7 @@ class DQUIC:
             print(f"Received data pace: {(total_bytes_sent_objs/max_stream_time):.2f} Bytes/s, {(curr_connection.sent_packet_number/max_stream_time):.2f} Packets/s")
             print("\n------------------------------------------------------------------------------------\n")
 
+        print(f"finished sending to {address}")
         return total_bytes_sent_objs
 
     def receive_from(self, max_bytes: int = MAX_RECV_BYTES):
@@ -279,8 +283,9 @@ class DQUIC:
         :param max_bytes: maximum bytes willing to accept
         :return: sender address and serialized objects represented by (stream_id:int : object:bytes)
         """
-
+        print("waiting for data...")
         received_bytes, sender_address = self.sock.recvfrom(65536)
+        print(f"received data from {sender_address}")
         len_recv_bytes = len(received_bytes)
 
         # handling connection:
@@ -292,7 +297,7 @@ class DQUIC:
         deser_pointer = self.__header_len  # pointer for deserialization of header and frames
         objs_dict = {}  # the returning dict
         objects_bytes = 0
-
+        print(f"got here 0 , sending the ack to {curr_connection.addr}")
         # handling object transition:
         if packet_header.packet_type == SHORT:
             curr_connection.recv_packet_number += 1
@@ -303,9 +308,10 @@ class DQUIC:
 
             # generating ack packet payload:
             ack_packet_payload = b""
-
-            # unpacking packet payload:
+            print(f"got here 1 , sending the ack to {curr_connection.addr}")
+            # unpacking packet payload frame by frame:
             while len(received_bytes) - deser_pointer >= self.__frame_len:
+                print(f"got here 2 , sending the ack to {curr_connection.addr}")
                 # extracting frame:
                 curr_frame: DQUICFrame = DQUICFrame.from_bytes(received_bytes[deser_pointer:deser_pointer+self.__frame_len])
                 deser_pointer += self.__frame_len  # updating pointer
@@ -329,10 +335,8 @@ class DQUIC:
 
                 # print(f"ack frame offset: {curr_frame.offset}")
 
-                if objects_bytes > max_bytes:  # in case bytes received is too large
-                    return sender_address, objs_dict  # returning the dict without curr object
-
-                objs_dict[curr_frame.stream_id] = stream_data  # appending object to returning dict
+                if objects_bytes <= max_bytes:  # in case bytes received is too large don't append to dict
+                    objs_dict[curr_frame.stream_id] = stream_data  # appending object to returning dict
 
             # print(f"packets till now: {self.recv_order-1}")
             # sending ack:
