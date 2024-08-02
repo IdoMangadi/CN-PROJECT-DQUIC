@@ -31,33 +31,40 @@ def main():
     server_socket.bind(server_address)
     print("DQUIC socket is up!")
 
-    # while input("Continuing receiving requests?\n1- YES\n2- NO\n") == "1":
-    print("Waiting for requests...")
-    # receiving request from client:
-    client_address, data = server_socket.receive_from(65536)
-    total_request_size = 0
-    if 66 in data:  # 66 is the stream that gets requests
-        print("Detailed client request: ")
-        request_str = data[66].decode()
-        streams_list = request_str.split(" ")  # splitting into pairs of "stream_id: object needed"
-        dict_to_send = {}
-        # building the dict to send:
-        for string in streams_list:
-            tmp = string.split(":")  # tmp = [stream_id , object's_number]
-            dict_to_send[int(tmp[0])] = random_objects[int(tmp[1])]  # the form of: (stream_id: object)
-            total_request_size += len(dict_to_send[int(tmp[0])])
-            print("Stream:"+tmp[0]+", Object:"+tmp[1]+f", "
-                                                      f"Actual size: {object_sizes[int(tmp[1])]}")
-        # sending the dict:
-        print(f"total objects size: {total_request_size}")
-        print("Sending objects...\n")
-        server_socket.send_to(client_address, dict_to_send)  # sending via DQUIC
+    while True:
+        print("Waiting for requests...")
+        # receiving request from client:
+        client_address, data = server_socket.receive_from(65536)
+        total_request_size = 0
+        if 66 in data:  # 66 is the stream that gets requests
+            print("Detailed client request: ")
+            request_str = data[66].decode()
+            streams_list = request_str.split(" ")  # splitting into pairs of "stream_id: object needed"
+            dict_to_send = {}
+            # building the dict to send:
+            for string in streams_list:
+                tmp = string.split(":")  # tmp = [stream_id , object's_number]
+                dict_to_send[int(tmp[0])] = random_objects[int(tmp[1])]  # the form of: (stream_id: object)
+                total_request_size += len(dict_to_send[int(tmp[0])])
+                print("Stream:"+tmp[0]+", Object:"+tmp[1]+f", "
+                                                          f"Actual size: {object_sizes[int(tmp[1])]}")
+            # sending the dict:
+            print(f"total objects size: {total_request_size}")
+            print("Sending objects...\n")
+            server_socket.send_to(client_address, dict_to_send)  # sending via DQUIC
 
-    print("Sending finishing msg")
-    server_socket.send_to(client_address, {77: "fin".encode()})
+        print("Sending finishing msg")
+        server_socket.send_to(client_address, {77: "fin".encode()})
+
+        if input("Continue to receive requests?\n1 - YES\n2 - NO\n") != "1":
+            break
 
     server_socket.close()
     print("Socket closed")
+
+    # -------------
+    # -------------
+    # -------------
 
 
 if __name__ == '__main__':

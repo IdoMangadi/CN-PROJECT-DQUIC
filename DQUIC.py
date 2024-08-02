@@ -244,6 +244,9 @@ class DQUIC:
 
             # print(f"packet with {frames_num} frames sent")
 
+        # resetting timeout:
+        self.sock.settimeout(None)
+
         # print(f"\nDQUIC PRINT: total packets sent to {address}: {curr_connection.sent_packet_number}")
         # print(f"DQUIC PRINT: total bytes sent (udp): {total_bytes_sent_udp}")
         # print(f"DQUIC PRINT: total bytes sent (objs): {total_bytes_sent_objs}\n")
@@ -270,7 +273,7 @@ class DQUIC:
 
         return total_bytes_sent_objs
 
-    def receive_from(self, max_bytes: int):
+    def receive_from(self, max_bytes: int = MAX_RECV_BYTES):
         """
         The function receives data from src
         :param max_bytes: maximum bytes willing to accept
