@@ -23,7 +23,7 @@ def dquic_echo_server():
             first_key = next(iter(data_second))
             data[first_key] = data_second[first_key]
         server_sock.send_to(addr, data)
-        print(f"Server received and sent data: {data} this is the {i} time")
+        # print(f"Server received and sent data: {data} this is the {i} time")
 
     server_sock.close()
 
@@ -52,7 +52,6 @@ class TestDQUIC(unittest.TestCase):
         # Test sending and receiving non-empty data in 1 stream
         data_to_send = {1: "Hi there".encode()}
         self.client_sock.send_to(self.server_address, data_to_send)
-        print("Sent data0")
         received_address, received_data = self.client_sock.receive_from(65536)
         self.assertEqual(received_address, ('127.0.0.1', 8880))
         self.assertEqual(received_data, data_to_send)
@@ -61,9 +60,7 @@ class TestDQUIC(unittest.TestCase):
         # Test sending and receiving non-empty data in 2 streams
         data_to_send = {1: "Hi there".encode(), 2: "Hello".encode()}
         self.client_sock.send_to(self.server_address, data_to_send)
-        print("Sent data1")
         received_address, received_data = self.client_sock.receive_from(65536)
-        print(f"Received data: {received_data}")
         self.assertEqual(received_address, ('127.0.0.1', 8880))
         self.assertEqual(received_data, data_to_send)
 
@@ -71,7 +68,6 @@ class TestDQUIC(unittest.TestCase):
         # Test sending and receiving non-empty data in 8 streams
         data_to_send = {i: f"Hi there {i}".encode() for i in range(1, 9)}
         self.client_sock.send_to(self.server_address, data_to_send)
-        print("Sent data2")
         received_address, received_data = self.client_sock.receive_from(65536)
         received_address, received_data_second = self.client_sock.receive_from(65536)
         first_key = next(iter(received_data_second))
